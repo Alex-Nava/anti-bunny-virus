@@ -1,0 +1,13 @@
+{
+  "file_monitoring": {
+    "target_directory": "./virus_sim/temp_test",
+    "max_mb_per_second": 20.0
+  },
+  "process_monitoring": {
+    "max_fork_rate_per_sec": 5,
+    "check_interval_seconds": 0.5
+  },
+  "logging": {
+    "log_file": "antibunny.log"
+  }
+}
