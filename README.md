@@ -83,8 +83,8 @@ El antivirus detectará la tasa anómala de escritura (**>15 MB/s**) y finalizar
 
 ## 📌 Proyecto y Documentación
 
-- Consulte el **Tablero Kanban de GitHub Projects** para revisar la planificación, los sprints y el backlog del proyecto.
-- Visite la **Wiki del Repositorio** para conocer la arquitectura detallada, el modelo de amenazas y la documentación técnica.
+- Consulte el [Tablero Kanban de GitHub Projects](https://github.com/users/Alex-Nava/projects) para revisar la planificación, los sprints y el backlog del proyecto.
+- Visite la [Wiki del Repositorio](https://github.com/Alex-Nava/anti-bunny-virus/wiki) para conocer la arquitectura detallada, el modelo de amenazas y la documentación técnica.
 
 ---
 
