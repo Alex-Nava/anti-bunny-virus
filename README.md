@@ -11,11 +11,14 @@ Sistema de detección y mitigación en tiempo real para ataques de denegación d
 ## 🎯 Características Principales
 
 - **Monitoreo de I/O en disco:** crecimiento volumétrico (`ΔMB/Δt`) en directorios vigilados.
-- **Monitoreo de memoria por proceso:** detecta duplicación/crecimiento anómalo de RAM (`ΔMB/Δt`) por PID.
+- **Monitoreo de memoria por proceso, basado en ventanas de tiempo:** mide `ΔMB` cada `check_window_seconds`, no una tasa instantánea (ver [[Modelo de Amenazas]] para el porqué).
 - **Monitoreo de creación de procesos:** detecta ráfagas de procesos nuevos (fork bomb) y ubica al proceso padre responsable.
+- **Anomalía sostenida, no un solo golpe:** ningún síntoma se considera un ataque hasta que se repite `min_consecutive_hits` veces seguidas.
+- **Modo `enforce` explícito:** por defecto (`enforce: false`) el sistema solo alerta, nunca mata procesos. Solo mitiga activamente si se activa a propósito.
+- **Lista de procesos protegidos:** procesos críticos del sistema operativo nunca se terminan, sin importar el modo.
 - **Mitigación activa por PID:** identifica al proceso agresor (por archivo abierto, por consumo de memoria o por relación padre-hijo) y lo termina.
 - **Configuración dinámica:** todos los umbrales viven en `config.json`, sin valores hardcodeados en el código.
-- **Simuladores incluidos:** tres escenarios de prueba aislados en `virus_sim/`, cada uno con un tope de seguridad para no comprometer tu máquina real si el sentinel fallara en detectarlo.
+- **Simuladores incluidos:** tres escenarios de prueba aislados en `virus_sim/`, cada uno con un tope de seguridad interno.
 
 ---
 
@@ -24,12 +27,12 @@ Sistema de detección y mitigación en tiempo real para ataques de denegación d
 ```text
 anti-bunny-virus/
 ├── anti_bunny.py            # Motor principal: disco + memoria + procesos
-├── config.json               # Umbrales de detección y parámetros
+├── config.json               # Umbrales, modo enforce y lista de procesos protegidos
 ├── virus_sim/
 │   ├── file_rabbit.py         # Simulador: escritura masiva en disco
 │   ├── memory_rabbit.py        # Simulador: duplicación de memoria
 │   └── fork_rabbit.py          # Simulador: creación acelerada de procesos
-├── antibunny.log              # Registro persistente de eventos (se genera al ejecutar)
+├── antibunny.log              # Registro persistente de eventos (se genera al ejecutar, no se versiona)
 ├── .gitignore
 └── README.md
 ```
@@ -44,68 +47,58 @@ anti-bunny-virus/
 python -m venv venv
 
 # Windows
-.\venv\Scripts\activate
+.\venv\Scripts\Activate.ps1
 # Linux/macOS
 source venv/bin/activate
 
 pip install psutil
 ```
 
-> Nota: la versión actual usa polling con `psutil`, no `watchdog`. Si más adelante migras a `watchdog` para el monitoreo de archivos, actualiza esta sección y el `pip install`.
-
-### 2. Configurar umbrales (`config.json`)
+### 2. Configurar (`config.json`)
 
 ```json
 {
-  "file_monitoring": { "target_directory": "./virus_sim/temp_test", "max_mb_per_second": 20.0 },
-  "memory_monitoring": { "max_mb_per_second": 25.0, "ignore_pids": [] },
-  "process_monitoring": { "max_new_processes_per_sec": 5 },
-  "general": { "check_interval_seconds": 0.3 },
+  "general": { "check_interval_seconds": 0.3, "enforce": false },
+  "file_monitoring": { "target_directory": "./virus_sim/temp_test", "max_mb_per_second": 20.0, "min_consecutive_hits": 3 },
+  "memory_monitoring": { "check_window_seconds": 2.0, "max_mb_per_second": 60.0, "min_mb_floor": 10.0, "min_consecutive_hits": 2, "ignore_pids": [] },
+  "process_monitoring": { "max_new_processes_per_sec": 15, "min_consecutive_hits": 3 },
+  "protected_process_names": ["System", "explorer.exe", "svchost.exe", "..."],
   "logging": { "log_file": "antibunny.log" }
 }
 ```
 
-### 3. Ejecutar la defensa
+> ⚠️ **`enforce: false` es el valor seguro para primer contacto con el proyecto.** Solo cámbialo a `true` cuando vayas a probar la mitigación real, y hazlo mientras corres los simuladores, no en tu sesión de trabajo normal. Ver [[Modelo de Amenazas]] para entender por qué existe este seguro.
+
+### 3. Ejecutar
 
 ```bash
 python anti_bunny.py
 ```
 
-En Windows/Linux, si el sentinel no puede terminar algún proceso por permisos, ejecútalo como administrador/root — sobre todo necesario para el monitoreo de procesos.
+### 4. Probar cada tipo de ataque
 
-### 4. Probar cada tipo de ataque (simuladores)
-
-Con el sentinel corriendo en una terminal, abre una segunda terminal y ejecuta uno a la vez:
+Con el sentinel corriendo en una terminal (y el venv activado en ambas), en una segunda terminal:
 
 ```bash
-# Ataque de disco
 python virus_sim/file_rabbit.py
-
-# Ataque de memoria
 python virus_sim/memory_rabbit.py
-
-# Ataque de procesos (fork bomb controlada)
 python virus_sim/fork_rabbit.py
 ```
 
-Cada simulador tiene un **tope de seguridad interno** (ver comentarios en cada archivo) para que, aunque el sentinel no lo detecte, el propio simulador se detenga solo antes de afectar tu sistema real.
+Cada simulador tiene un tope de seguridad interno: aunque el sentinel no lo detecte, el propio simulador se detiene solo.
 
 ---
 
-## 🧪 Cómo saber que funciona (evidencia para la sustentación)
+## 🧪 Evidencia de que funciona
 
-Para cada uno de los 3 simuladores, corre la prueba y guarda:
+Ver [[Pruebas y Validación]] para el protocolo completo y la tabla de resultados. Resumen del comportamiento esperado:
 
-1. **Captura de la terminal del sentinel** en el momento de la alerta (debe mostrarse `[ALERTA-DISCO]`, `[ALERTA-MEMORIA]` o `[ALERTA-PROCESOS]` y luego `[LIQUIDADO]`).
-2. **Captura de la terminal del simulador** mostrando que fue terminado abruptamente (el proceso muere sin llegar a su tope de seguridad).
-3. **El fragmento correspondiente de `antibunny.log`** (ábrelo después de la prueba, cada evento queda con timestamp).
-4. **Un cronómetro o timestamp** del momento en que iniciaste el simulador vs. el momento del `[LIQUIDADO]` en el log, para reportar la latencia de detección real.
-
-Guarda estas 4 evidencias por cada ataque en la Wiki, en la página `Pruebas y Validación` (usa la tabla que ya te dejé ahí). Con eso demuestras que no solo escribiste código, sino que lo probaste contra los tres síntomas descritos en el enunciado (memoria, disco y procesos).
-
-### Prueba de "falso positivo" (opcional pero recomendable)
-
-Copia un archivo grande (por ejemplo 200 MB) a una carpeta normal *fuera* de `virus_sim/temp_test` y confirma que el sentinel **no** dispara ninguna alerta — así demuestras que el umbral está calibrado y no mata procesos legítimos.
+| Escenario | Resultado esperado |
+|---|---|
+| Uso normal del equipo (Chrome, VS Code, etc.) corriendo junto al sentinel en modo `enforce: true` | Cero procesos terminados |
+| `file_rabbit.py` | Detectado y terminado en segundos |
+| `memory_rabbit.py` | Detectado tras 2 ventanas de crecimiento sostenido y terminado |
+| `fork_rabbit.py` | Detectado y terminado el proceso padre |
 
 ---
 
@@ -113,17 +106,14 @@ Copia un archivo grande (por ejemplo 200 MB) a una carpeta normal *fuera* de `vi
 
 - **Python 3.10+**
 - **psutil:** inspección de procesos, PIDs, memoria y descriptores de archivos abiertos.
-- **JSON:** configuración mediante `config.json`, leída en tiempo de ejecución (sin valores hardcodeados).
+- **JSON:** configuración en tiempo de ejecución.
 
 ---
 
-## 📌 Proyecto y Documentación
+## 📌 Documentación
 
-- Consulta el [Tablero Kanban de GitHub Projects](https://github.com/users/Alex-Nava/projects) para la planificación y el backlog.
-- Visita la [Wiki del Repositorio](https://github.com/Alex-Nava/anti-bunny-virus/wiki) para el modelo de amenazas, arquitectura, estado del arte y evidencia de pruebas.
-
----
+- [Wiki del Repositorio](https://github.com/Alex-Nava/anti-bunny-virus/wiki): modelo de amenazas, arquitectura, estado del arte y evidencia de pruebas.
 
 ## 📄 Licencia
 
-Este proyecto se distribuye con fines académicos y de investigación en ciberseguridad. Puede adaptarse y ampliarse para fines educativos o experimentales.
+Proyecto con fines académicos y de investigación en ciberseguridad.
