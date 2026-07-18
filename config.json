@@ -1,18 +1,30 @@
 {
+  "general": {
+    "check_interval_seconds": 0.3,
+    "enforce": true
+  },
   "file_monitoring": {
     "target_directory": "./virus_sim/temp_test",
-    "max_mb_per_second": 20.0
+    "max_mb_per_second": 10.0,
+    "min_consecutive_hits": 1
   },
   "memory_monitoring": {
-    "max_mb_per_second": 25.0,
+    "check_window_seconds": 2.0,
+    "max_mb_per_second": 100.0,
+    "min_mb_floor": 10.0,
+    "min_consecutive_hits": 2,
     "ignore_pids": []
   },
   "process_monitoring": {
-    "max_new_processes_per_sec": 5
+    "max_new_processes_per_sec": 15,
+    "min_consecutive_hits": 3
   },
-  "general": {
-    "check_interval_seconds": 0.1
-  },
+  "protected_process_names": [
+    "System", "Idle", "Registry", "MemCompression",
+    "smss.exe", "csrss.exe", "wininit.exe", "winlogon.exe",
+    "services.exe", "lsass.exe", "svchost.exe", "dwm.exe", "explorer.exe",
+    "systemd", "init", "kthreadd", "sshd", "chrome.exe", "Code.exe"
+  ],
   "logging": {
     "log_file": "antibunny.log"
   }
