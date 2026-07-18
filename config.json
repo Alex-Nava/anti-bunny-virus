@@ -3,9 +3,15 @@
     "target_directory": "./virus_sim/temp_test",
     "max_mb_per_second": 20.0
   },
+  "memory_monitoring": {
+    "max_mb_per_second": 25.0,
+    "ignore_pids": []
+  },
   "process_monitoring": {
-    "max_fork_rate_per_sec": 5,
-    "check_interval_seconds": 0.5
+    "max_new_processes_per_sec": 5
+  },
+  "general": {
+    "check_interval_seconds": 0.1
   },
   "logging": {
     "log_file": "antibunny.log"
